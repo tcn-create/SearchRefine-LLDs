@@ -12,21 +12,31 @@
 
 - **Iterative Search & Refine**: 集成 AutoRefine 的自动化搜索流，通过多次 Rollout 和自我修正（Self-Correction）生成高质量推理路径。
 - **GRPO Anti-Collapse Mechanisms**: 
-    - **Reward Rescaling**: 实现论文建议的奖励重缩放，有效缓解组内相对奖励差异过大导致的梯度爆炸。
-    - **Stabilized KL-Divergence**: 优化了 $D_{KL}(\pi_\theta || \pi_{ref})$ 的惩罚项，确保在大规模 Post-training 过程中策略更新的平滑性。
+    - **Group-wise Reward Whitening**: 引入严格的组内奖励标准化逻辑，加入稳定性常数 $\eta$ 防止梯度爆炸。
+    - **Dynamic KL-Divergence Control**: 实现论文建议的动态 $\beta$ 调节机制，根据实时策略偏差自动调整约束强度。
 - **Efficient Scalability**: 适配分布式训练环境（Megatron/DeepSpeed），支持 vLLM 快速推理采样。
 
 ---
 
 ## 📈 算法原理 (Algorithm & Stability)
 
-在标准的 GRPO 训练中，由于缺乏 Critic 网络，组内奖励的方差极易导致训练坍塌。本项目参考 [arXiv:2512.04220](https://arxiv.org/abs/2512.04220) 引入了稳定性修正项：
+在标准的 GRPO 训练中，由于缺乏 Critic 网络，组内奖励的方差极易导致训练坍塌。本项目参考 [arXiv:2512.04220](https://arxiv.org/abs/2512.04220) 引入了以下稳定性修正：
 
-$$J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}} \left[ \frac{1}{G} \sum_{i=1}^G \left( \mathcal{L}_{clip}(\theta) - \beta D_{KL}(\pi_\theta || \pi_{ref}) \right) \right]$$
+### 1. 目标函数优化
+我们在损失函数中强化了对策略偏移的动态约束：
+$$J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}} \left[ \frac{1}{G} \sum_{i=1}^G \left( \mathcal{L}_{clip}(\theta) - \beta_t D_{KL}(\pi_\theta || \pi_{ref}) \right) \right]$$
 
-针对 **Training Collapse**，我们特别实现了：
-1. **Group-wise Advantage Whitening**: 在采样组内执行严格的归一化，确保 $\hat{A}_i$ 的分布稳定性。
-2. **Adaptive Reward Clipping**: 动态调整奖励裁剪阈值，防止单一异常样本破坏整个 Batch 的梯度方向。
+### 2. 抑制坍塌的核心改进
+针对 **Training Collapse**，本项目重点实现了：
+
+* **Advantage Whitening (优势函数白化)**:
+    通过以下公式确保每个采样组内的优势函数分布稳定：
+    $$\hat{A}_i = \frac{r_i - \text{mean}(\{r_1, \dots, r_G\})}{\text{std}(\{r_1, \dots, r_G\}) + \eta}$$
+    *其中 $\eta$ 为稳定性常数，确保在奖励分布极度集中时仍能提供可靠梯度。*
+
+* **Adaptive KL Control (动态 KL 控制)**:
+    实现了动态更新系数 $\beta_t$ 的逻辑，防止模型在推理路径过长时出现策略突变：
+    $$\beta_{t+1} = \beta_t + \alpha (D_{KL} - \text{Target}_{KL})$$
 
 ---
 
