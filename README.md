@@ -24,7 +24,10 @@
 
 ### 1. 目标函数优化
 我们在损失函数中强化了对策略偏移的动态约束：
-$$J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}(O|q)} \left[ \frac{1}{G} \sum_{i=1}^G \left( \min \left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)} \hat{A}_i, \text{clip} \left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)}, 1-\epsilon, 1+\epsilon \right) \hat{A}_i \right) - \beta_t D_{KL}(\pi_\theta || \pi_{ref}) \right) \right]$$
+
+$$
+J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}(O|q)} \left[ \frac{1}{G} \sum_{i=1}^G \left( \min \left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)} \hat{A}_i, \text{clip} \left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)}, 1-\epsilon, 1+\epsilon \right) \hat{A}_i \right) - \beta_t D_{KL}(\pi_\theta || \pi_{ref}) \right) \right]
+$$
 
 ### 2. 抑制坍塌的核心改进
 针对 **Training Collapse**，本项目重点实现了：
@@ -32,11 +35,12 @@ $$J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{
 * **Advantage Whitening (优势函数白化)**:
     通过以下公式确保每个采样组内的优势函数分布稳定：
     $$\hat{A}_i = \frac{r_i - \text{mean}(\{r_1, \dots, r_G\})}{\text{std}(\{r_1, \dots, r_G\}) + \eta}$$
-    *其中 \eta 为稳定性常数，确保在奖励分布极度集中时仍能提供可靠梯度。*
+    *其中 $\eta$ 为稳定性常数，确保在奖励分布极度集中时仍能提供可靠梯度。*
 
 * **Adaptive KL Control (动态 KL 控制)**:
-    实现了动态更新系数 \beta_t 的逻辑，防止模型在推理路径过长时出现策略突变：
+    实现了动态更新系数 $\beta_t$ 的逻辑，防止模型在推理路径过长时出现策略突变：
     $$\beta_{t+1} = \beta_t + \alpha (D_{KL} - \text{Target}_{KL})$$
+    *其中 $\alpha$ 为步长因子，用于平衡策略稳定性与收敛速度。*
 
 ---
 
@@ -47,13 +51,3 @@ $$J_{GRPO}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{
 git clone [https://github.com/tcn-create/SearchRefine-LLDs.git](https://github.com/tcn-create/SearchRefine-LLDs.git)
 cd SearchRefine-LLDs
 pip install -r requirements.txt
-```
-## 致谢 (Acknowledgements)
-特别感谢以下开源项目和研究工作：
-
-[AutoRefine](https://github.com/syr-cn/AutoRefine): 提供了优秀的迭代搜索框架。
-
-[arXiv:2512.04220](https://arxiv.org/abs/2512.04220): 为解决 GRPO 训练稳定性提供了核心理论支撑。
-
-## 📄 开源协议 (License)
-本项目采用 Apache 2.0 协议开源。
